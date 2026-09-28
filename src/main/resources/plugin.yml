@@ -1,0 +1,24 @@
+name: Catalyst
+version: '${version}'
+main: gg.catalyst.Catalyst
+api-version: '1.16'
+description: The ultimate performance plugin for profiling, benchmarking, and tuning your Minecraft server!
+website: https://modrinth.com/plugin/catalyst-performance
+authors: [CabronFring]
+folia-supported: true
+# Only so spark, when present, loads first and its API is visible to Catalyst.
+softdepend: [spark]
+
+commands:
+  catalyst:
+    description: Scan and optimize server performance settings.
+    usage: /catalyst <perf|config|network|modules|status|reload>
+    permission: catalyst.admin
+
+permissions:
+  catalyst.spark.install:
+    description: Download and load spark with /catalyst perf spark install.
+    default: op
+  catalyst.admin:
+    description: Use Catalyst commands and view performance reports.
+    default: op

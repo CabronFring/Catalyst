@@ -1,0 +1,10 @@
+.gradle/
+# Anchored to the Gradle output dirs only: a bare "build/" also matched the
+# catalyst.build source package (buildSrc/src/main/kotlin/catalyst/build), which
+# silently kept JarIntegrity.kt out of git and broke clean-checkout builds.
+/build/
+buildSrc/build/
+tools/botprobe/build/
+.idea/
+*.iml
+out/

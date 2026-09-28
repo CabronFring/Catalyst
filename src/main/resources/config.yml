@@ -1,0 +1,303 @@
+# Catalyst configuration.
+# Two halves: config tuning (edits your server's config files) and runtime modules
+# (act while it runs). Anything it edits is backed up first - /catalyst config restore.
+
+# Scan for lag causes shortly after startup.
+scan-on-startup: true
+
+# Seconds to wait first, so other plugins finish loading.
+startup-delay-seconds: 10
+
+# List settings that are already fine, not just ones to change.
+show-passing-checks: false
+
+# Optimizations to skip, by id (ids from /catalyst config check).
+#   ignored-optimizations: [bukkit.spawn-limits, spigot.merge-radius]
+ignored-optimizations: []
+
+# Anonymous stats to bstats.org (server count, version, platform, features used).
+# No server or player is identified. Off for all plugins at once in plugins/bStats/.
+metrics: true
+
+
+# ─── Security ─────────────────────────────────────────────────────────────
+
+security:
+  # Refuse to start if the jar changed since it was built (usually tampering).
+  # Off only if you repackage the jar yourself.
+  verify-jar-integrity: true
+
+
+# ─── Libraries ──────────────────────────────────────────────────────────────
+# The bot stage needs a Minecraft client library, fetched in the background to
+# plugins/Catalyst/libs and checked against a built-in SHA-256. Off for offline hosts.
+libraries:
+  download: true
+
+  # Via version the bots join other MC versions with:
+  #   pinned - tested with this release, SHA-checked. The safe choice.
+  #   latest - newest in the repo, for new MC versions early; revert if bots break.
+  via: pinned
+
+
+# ─── Benchmark ────────────────────────────────────────────────────────────
+# /catalyst perf bench measures what each kind of load costs, in throwaway worlds
+# (wants ~1 GB free disk). Reports save to plugins/Catalyst/reports/.
+benchmark:
+
+  # perf lag and perf network are refused during a bench (their load skews it); true
+  # allows them. perf profile and perf plugins stay refused - same spark profiler.
+  tools-during-run: false
+
+  # Runs per stage; the median is reported. 1-5, about 9s each.
+  repeats: 3
+
+  # Load level: LOW, MEDIUM, HARSH or EXTREME. Heavier reads clearer on a fast server
+  # but hits a slow one harder; EXTREME drops most below 20 TPS. Per run: perf bench harsh.
+  intensity: MEDIUM
+
+  # Amount added per level. enabled: false skips a stage, 0 skips it at that level,
+  # a bare number is the same everywhere.
+  stages:
+    villagers:                # up to 3000
+      enabled: true
+      LOW: 50
+      MEDIUM: 100
+      HARSH: 300
+      EXTREME: 1000
+    cows:                     # up to 5000
+      enabled: true
+      LOW: 100
+      MEDIUM: 200
+      HARSH: 600
+      EXTREME: 2000
+    redstone-clocks:          # observer clocks driving 8 dust each, up to 420
+      enabled: true
+      LOW: 25
+      MEDIUM: 50
+      HARSH: 105
+      EXTREME: 400
+    pistons:                  # sticky pistons on a slime block + 4 stuck to it, up to 420
+      enabled: true
+      LOW: 25
+      MEDIUM: 50
+      HARSH: 105
+      EXTREME: 400
+    hoppers:                  # loops of 4 passing items round, up to 7056
+      enabled: true
+      LOW: 500
+      MEDIUM: 1000
+      HARSH: 1764
+      EXTREME: 6000
+    dropped-items:            # on the ground, can't merge or be picked up, up to 4096
+      enabled: true
+      LOW: 250
+      MEDIUM: 500
+      HARSH: 1024
+      EXTREME: 4000
+    minecarts:                # round loops of powered rail, up to 800
+      enabled: true
+      LOW: 50
+      MEDIUM: 100
+      HARSH: 192
+      EXTREME: 800
+    explosions:               # TNT set off per second, up to 50
+      enabled: true
+      LOW: 4
+      MEDIUM: 10
+      HARSH: 24
+      EXTREME: 50
+    player-footprints:        # chunks a player keeps ticking, up to 16
+      enabled: true
+      LOW: 2
+      MEDIUM: 3
+      HARSH: 6
+      EXTREME: 12
+    chunk-generation:         # new real-terrain chunks, generated and timed, up to 300
+      enabled: true
+      LOW: 15
+      MEDIUM: 30
+      HARSH: 60
+      EXTREME: 150
+
+  # Chunk generation is timed in a temporary world made from your overworld's seed -
+  # nothing copied, nothing in the real world touched. Empty picks the overworld with
+  # the most generated land; or name a world's seed to use. The report says which.
+  terrain-world: ""
+
+  # Real clients ("bots") connect to 127.0.0.1 to show a player's true cost against the
+  # footprint estimate. Own process (their CPU isn't counted), no player data left behind.
+  # Named cat_bot_N; a name a real player has used here is refused. To join they skip the
+  # online-mode Mojang check, whitelist, bans, a full server and plugin kicks - but only
+  # under a bot's name, from 127.0.0.1, with the run's token, while running. Anyone else
+  # on a bot's name logs in as normal and is just reported. Needs the libraries above.
+  bots:
+    # Include bots in every bench; perf bench bots runs them regardless.
+    enabled: false
+    count: 20                 # up to max-count
+
+    # Hard ceiling on bots per run, 1-200. The memory guard usually stops a run well
+    # before this, so raise it only with the headroom to match.
+    max-count: 100
+
+    # perf bench bots <count> spread: how far (blocks) the bots scatter, 32-2000.
+    # Only already-generated land is used, so no new chunks are forced.
+    spread-radius: 256
+
+    # Bot name prefix, then a number. 1-13 letters/digits/underscores, not ending in
+    # a digit. Names a real player has used here are refused whatever the prefix.
+    name-prefix: "cat_bot_"
+
+    # Stop the bots early if the server's memory stays this full while they run
+    # (percent, two checks a second apart), rather than risk a crash. 10-98.
+    memory-limit: 85
+
+    # Metadata each bot carries while online (player.hasMetadata(...)), so plugins can
+    # tell them from players. Empty sets none. "NPC" makes NPC-skipping plugins skip
+    # them too, which undercounts their cost.
+    metadata-key: "CatalystBot"
+
+    # Just for looks: skins the bots wear, one per bot at random, fetched from Mojang
+    # at the start of a run. Paper only. Up to 20 names; [] fetches none.
+    skins:
+      - "Notch"
+      - "jeb_"
+      - "Dinnerbone"
+      - "Grumm"
+      - "LadyAgnes"
+      - "kingbdogz"
+      - "slicedlime"
+      - "Searge"
+      - "Marc_IRL"
+      - "MHF_Steve"
+      - "MHF_Alex"
+      - "MHF_Herobrine"
+
+
+# ─── Runtime modules ────────────────────────────────────────────────────────
+# These act while the server runs. See what they've done with /catalyst modules.
+runtime:
+
+  # Caps naturally-spawned mobs per chunk (the shape of a runaway farm). Breeding,
+  # spawn eggs and plugin spawns are untouched.
+  mob-limiter:
+    enabled: true
+    max-mobs-per-chunk: 40
+
+  # Merges dropped items into stacks once a chunk holds more than the threshold.
+  # Never deletes: a drop is absorbed only after its contents join another stack.
+  item-merger:
+    enabled: true
+    items-per-chunk-threshold: 20
+
+
+# ─── Protection ─────────────────────────────────────────────────────────────
+# Guards against known crash exploits. Each guard stays registered but does nothing
+# when disabled; toggling takes effect immediately with /catalyst modules <id> on|off.
+protection:
+
+  # Drops malformed bundle-select and container-click packets before the decoder sees
+  # them. Documented crashes: bundle slot index < -1 (array overrun), button value < 0
+  # or > 40 (switch statement fall-through). Paper 1.20.5+ patches these internally;
+  # this guard adds the same protection to Spigot and older Paper builds.
+  packet-anti-crash:
+    enabled: true
+
+  # A tab-complete buffer with > 25 '{' braces, or an NBT selector with > 15 '['
+  # brackets, overflows the recursive entity-selector parser (stack overflow crash).
+  # AsyncTabCompleteEvent fires before the dispatcher reads the buffer, so cancelling
+  # here prevents the parse entirely. Thresholds match the ServerPatches project.
+  tab-complete-nbt:
+    enabled: true
+    max-brace-depth: 25
+    max-nbt-bracket-depth: 15
+
+  # Books with thousands of pages or extremely long text can cause OOM or lag when
+  # other players open them. Modified clients can bypass the vanilla 100-page cap.
+  book-exploit:
+    enabled: true
+    max-pages: 100
+    max-page-length: 1000
+
+  # Modified clients can send sign text longer than the vanilla 15-character limit.
+  # Disabled by default — vanilla already validates this on modern Paper/Spigot builds.
+  sign-overflow:
+    enabled: false
+    max-line-length: 100
+
+  # The vanilla client caps anvil renames at 50 characters.
+  # Disabled by default — vanilla enforces this server-side on modern builds.
+  anvil-rename:
+    enabled: false
+    max-name-length: 100
+
+  # Creative mode lets clients push arbitrary item stacks to the server.
+  # Disabled by default — modern Paper validates NBT size on receipt.
+  creative-nbt:
+    enabled: false
+    max-display-name-length: 100
+    max-lore-lines: 50
+    max-enchantments: 50
+
+
+# ─── Experimental ─────────────────────────────────────────────────────────
+
+experimental:
+
+  # On (the default): perf profile uploads the .sparkprofile to spark's servers and
+  # links the spark.lucko.me viewer, as spark's own /spark profiler does, instead of
+  # you dragging the local file there. The link is unlisted but public to anyone who
+  # has it. Set false to keep the profile on-server only; it is saved locally either
+  # way, and if the upload fails (no internet) it falls back to the local file.
+  spark-upload: true
+
+  # Sends the scan report to an HTTP endpoint as multipart form data. The whole
+  # request is described here; leave headers empty for an anonymous endpoint.
+  # Headers are stored in plain text, so only point this at a server you trust.
+  upload:
+    enabled: false
+
+    # On failure, print the full error, trace and reply to console (chat shows one line).
+    debug: false
+
+    request:
+      endpoint: ""
+      method: "POST"
+
+      # Form field the file is sent under; usually "file", sometimes "upload".
+      file-field: "file"
+
+      # Request headers. Content-Type is set by Catalyst (multipart boundary).
+      #   headers:
+      #     Authorization: "Bearer YOUR_TOKEN"
+      headers: {}
+
+      # Where the URL sits in the JSON reply, e.g. "result.urls". Empty returns every
+      # URL found, which may include unrelated links.
+      response-url-path: ""
+
+      # Extra form fields sent with the file.
+      #   fields:
+      #     expires: "7d"
+      fields: {}
+
+
+# ─── TPS watchdog ─────────────────────────────────────────────────────────
+# Warns when tick rate drops, once per incident. TPS comes from the server API on
+# Paper, Purpur, Folia and Spigot; on plain CraftBukkit Catalyst times it itself,
+# which needs a minute to warm up and lags real dips slightly.
+tps-watchdog:
+  enabled: true
+
+  # How often to check, seconds.
+  check-interval-seconds: 30
+
+  # Warn below this TPS. 20 is perfect; dips to 18-19 pass unnoticed, below 15 is felt.
+  warn-below: 15.0
+
+  # Minimum seconds between warnings.
+  cooldown-seconds: 300
+
+  # Console commands to run when TPS drops (at most once per cooldown). Empty just logs.
+  #   commands: ["say Server is under load, please bear with us"]
+  commands: []
