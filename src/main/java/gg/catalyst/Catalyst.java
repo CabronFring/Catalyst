@@ -1009,16 +1009,33 @@ public final class Catalyst extends JavaPlugin {
         }
 
         final BotStage stage = ((BotStage.Ready) plan).stage();
-
-        if (stage.awaitingOwners()) {
-            sender.sendMessage(ChatColor.YELLOW + "Checking bot names with Mojang - try again in a moment.");
-            return;
-        }
-
         this.activeBotSession = stage;
         final org.bukkit.Location center = roamAround != null ? roamAround
                 : this.getServer().getWorlds().get(0).getSpawnLocation();
         final int radius = spread ? BotStage.spreadRadius(this) : 0;
+
+        // In online mode the stage has just asked Mojang who owns the bot names; every new
+        // stage asks afresh, so the bots wait here for that answer rather than refusing.
+        if (stage.awaitingOwners()) {
+            sender.sendMessage(ChatColor.GRAY + "Checking bot names with Mojang...");
+            this.pendingBotSession = stage;
+        }
+        this.launchBotSessionWhenReady(sender, stage, center, radius, 0);
+    }
+
+    /** A bot session still waiting for Mojang's answer; nothing of it has started yet. */
+    private volatile BotStage pendingBotSession;
+    private static final int OWNER_WAIT_SECONDS = 12;
+
+    private void launchBotSessionWhenReady(CommandSender sender, BotStage stage, org.bukkit.Location center,
+                                           int radius, int waited) {
+        if (this.activeBotSession != stage) return; // stopped while waiting
+
+        if (stage.awaitingOwners() && waited < OWNER_WAIT_SECONDS) {
+            this.runDelayed(() -> this.launchBotSessionWhenReady(sender, stage, center, radius, waited + 1), 1);
+            return;
+        }
+        this.pendingBotSession = null;
 
         // startRoaming calls BotProcess.launch() which spawns a JVM; run it off the main thread
         // so the tick does not stall for the duration of process start (~100-500 ms on Windows).
@@ -1042,6 +1059,13 @@ public final class Catalyst extends JavaPlugin {
 
         final BotStage stage = this.activeBotSession;
         this.activeBotSession = null;
+
+        if (stage == this.pendingBotSession) {
+            // Still waiting for Mojang: no bot has joined, so there is nothing to clean up.
+            this.pendingBotSession = null;
+            sender.sendMessage(ChatColor.AQUA + "Bots cancelled before joining.");
+            return;
+        }
         stage.stop();
         sender.sendMessage(ChatColor.AQUA + "Bots are leaving.");
     }
