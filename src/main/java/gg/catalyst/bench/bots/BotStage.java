@@ -33,6 +33,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -214,8 +215,11 @@ public final class BotStage implements Listener {
     /** In online mode: name to the real account holding it, from Mojang. Null offline. */
     private CompletableFuture<Map<String, UUID>> owners;
 
-    /** Skins to hand out, fetched from Mojang in the background; null when none are set up. */
-    private CompletableFuture<List<MojangNames.Skin>> skins;
+    /**
+     * Skins to hand out, filled in from Mojang in the background as each one arrives; null when
+     * none are set up.
+     */
+    private List<MojangNames.Skin> skins;
     private final Random skinPicker = new Random();
 
     /**
@@ -234,28 +238,32 @@ public final class BotStage implements Listener {
             return;
         }
         final String userAgent = Branding.name() + "/" + this.plugin.getDescription().getVersion();
-        this.skins = new CompletableFuture<>();
+        final List<MojangNames.Skin> skins = new CopyOnWriteArrayList<>();
+        this.skins = skins;
         this.plugin.runAsync(() -> {
             try {
-                final List<MojangNames.Skin> found = MojangNames.skins(wanted, userAgent);
+                final MojangNames.SkinLookup lookup = MojangNames.skins(wanted, userAgent, skins::add);
 
-                if (found.size() < wanted.size())
-                    this.plugin.getLogger().info("Bot skins: found " + found.size() + " of the " + wanted.size()
-                            + " players in benchmark.bots.skins; the rest do not exist or have no skin.");
-                this.skins.complete(found);
-            } catch (Exception e) {
-                this.plugin.getLogger().info("Bot skins: could not reach Mojang (" + e.getClass().getSimpleName()
-                        + "), so the bots keep their default skins.");
-                this.skins.complete(List.of());
+                if (!lookup.missing().isEmpty())
+                    this.plugin.getLogger().info("Bot skins: " + String.join(", ", lookup.missing())
+                            + (lookup.missing().size() == 1 ? " does" : " do")
+                            + " not exist or " + (lookup.missing().size() == 1 ? "has" : "have")
+                            + " no skin; remove from benchmark.bots.skins.");
+                if (!lookup.failed().isEmpty())
+                    this.plugin.getLogger().info("Bot skins: Mojang did not answer for " + String.join(", ", lookup.failed())
+                            + " (rate-limited or unreachable); using the other " + lookup.found().size()
+                            + ". The next run tries again.");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         });
     }
 
     /** Dresses a verified bot in one of the fetched skins, at random. Never delays a login. */
     private void applySkin(AsyncPlayerPreLoginEvent event) {
-        final List<MojangNames.Skin> ready = this.skins == null ? null : this.skins.getNow(null);
+        final List<MojangNames.Skin> ready = this.skins == null ? List.of() : List.copyOf(this.skins);
 
-        if (ready == null || ready.isEmpty()) return;
+        if (ready.isEmpty()) return;
         final MojangNames.Skin skin = ready.get(this.skinPicker.nextInt(ready.size()));
 
         try {
